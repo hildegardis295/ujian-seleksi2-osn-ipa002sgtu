@@ -1,0 +1,666 @@
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  query, 
+  orderBy 
+} from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  signInWithCustomToken, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  Clock, 
+  User, 
+  ChevronLeft, 
+  ChevronRight, 
+  CheckCircle, 
+  Grid, 
+  Download,
+  AlertTriangle,
+  Send,
+  BookOpen,
+  Hash,
+  ShieldCheck // Menambahkan impor yang terlewat
+} from 'lucide-react';
+
+// --- Firebase Configuration ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'osn-ipa-002';
+
+// --- Data Soal ---
+const SOAL_DATA = [
+  { id: 1, type: 'mcq', question: "Jika populasi katak di sebuah sawah menurun drastis akibat perburuan manusia, dampak jangka panjang yang paling mungkin terjadi pada ekosistem tersebut adalah...", options: ["Populasi belalang menurun karena jumlah ular meningkat", "Populasi rumput meningkat karena jumlah belalang berkurang", "Populasi ular menurun drastis sehingga populasi elang terancam", "Populasi belalang meningkat drastis sehingga merusak tanaman padi"], answer: 3 },
+  { id: 2, type: 'mcq', question: "Penyu laut merupakan hewan yang siklus hidupnya dimulai dari telur di pantai hingga dewasa di samudera. Upaya pelestarian yang paling tepat adalah...", options: ["Melarang nelayan menangkap ikan di seluruh area laut", "Memindahkan telur ke tempat penetasan semi-alami (penangkaran) lalu melepas tukik secara bersamaan", "Memberi makan tukik (anak penyu) di laut lepas agar cepat besar", "Memagari seluruh pantai agar tidak ada hewan lain yang masuk"], answer: 1 },
+  { id: 3, type: 'mcq', question: "Hubungan antara bentuk tubuh dan fungsi adaptasi yang benar adalah...", options: ["Kaktus berdaun duri untuk mempercepat penguapan", "Teratai berdaun lebar untuk menyerap oksigen lebih banyak dari air", "Kantong semar menghasilkan nektar untuk memerangkap serangga sebagai sumber nitrogen", "Kaktus berdaun duri untuk menyimpan cadangan makanan"], answer: 2 },
+  { id: 4, type: 'mcq', question: "Jika seseorang sering terpapar polusi asap rokok yang merusak elastisitas alveolus, maka gangguan yang terjadi adalah...", options: ["Udara tidak bisa masuk melalui hidung", "Proses penyaringan kuman di tenggorokan terhenti", "Penyerapan oksigen ke dalam darah menjadi tidak maksimal", "Frekuensi bernapas menjadi lebih lambat dari biasanya"], answer: 2 },
+  { id: 5, type: 'mcq', question: "Seorang remaja laki-laki mulai mengalami perubahan suara menjadi lebih berat dan mimpi basah. Tindakan yang paling tepat adalah...", options: ["Mengurangi aktivitas fisik agar tidak cepat lelah", "Menjaga kebersihan organ reproduksi dan memahami bahwa itu adalah proses alami", "Mengonsumsi obat hormonal agar pertumbuhan lebih cepat", "Menghindari bersosialisasi dengan teman lawan jenis"], answer: 1 },
+  { id: 6, type: 'mcq', question: "Andi mendengar suara kembali di gua (jelas), tapi di bioskop tanpa peredam suaranya tumpang tindih. Ini karena...", options: ["Bunyi di dalam gedung bioskop merambat lebih lambat", "Di dalam gedung terjadi gaung karena jarak dinding pemantul sangat dekat", "Gua memiliki dinding yang menyerap bunyi", "Bunyi di gua tidak mengalami pemantulan"], answer: 1 },
+  { id: 7, type: 'mcq', question: "Benda digeser mendekati lampu senter, maka ukuran bayangan benda pada layar akan...", options: ["Menjadi lebih kecil dan lebih tajam", "Menjadi lebih besar dan lebih kabur", "Tetap sama karena ukuran benda tidak berubah", "Hilang karena tertutup oleh cahaya senter"], answer: 1 },
+  { id: 8, type: 'mcq', question: "Keunggulan dari sendi yang menghubungkan tulang lengan atas dengan tulang belikat adalah...", options: ["Memungkinkan gerakan ke satu arah saja agar stabil", "Memungkinkan gerakan memutar sehingga tangan sangat fleksibel", "Menghindari gesekan antar tulang agar tidak nyeri", "Pembatasi gerakan agar tulang tidak mudah patah"], answer: 1 },
+  { id: 9, type: 'mcq', question: "Tahapan siklus air yang paling terganggu secara langsung akibat hilangnya vegetasi hutan adalah...", options: ["Evaporasi", "Kondensasi", "Infiltrasi", "Presipitasi"], answer: 2 },
+  { id: 10, type: 'mcq', question: "Jika jumlah baterai pada elektromagnet ditambah, maka...", options: ["Paku akan menjadi panas dan kehilangan sifat magnetnya", "Daya tarik magnet pada paku akan semakin kuat", "Kutub magnet pada paku akan bertukar posisi", "Paku akan menolak semua benda logam"], answer: 1 },
+  { id: 11, type: 'mcq', question: "Penggunaan plastik pada gagang panci didasarkan pada sifat...", options: ["Plastik adalah konduktor panas yang baik", "Plastik adalah isolator panas agar tangan tidak melepuh", "Plastik dapat mempercepat air mendidih", "Plastik mengubah panas menjadi energi gerak"], answer: 1 },
+  { id: 12, type: 'mcq', question: "Air laut dikelompokkan ke dalam...", options: ["Zat Tunggal karena tampak bening", "Unsur karena terdiri dari atom-atom", "Campuran Homogen karena zat penyusunnya tercampur rata", "Campuran Heterogen karena garam bisa mengendap"], answer: 2 },
+  { id: 13, type: 'mcq', question: "Perubahan energi pada kincir air di sungai deras adalah...", options: ["Energi potensial -> energi panas -> energi listrik", "Energi kinetik -> energi gerak kincir -> energi listrik", "Energi kimia -> energi listrik", "Energi listrik -> energi gerak"], answer: 1 },
+  { id: 14, type: 'mcq', question: "Posisi Bumi berada di antara Matahari dan Bulan dalam satu garis lurus menyebabkan...", options: ["Gerhana Matahari Total", "Gerhana Bulan Total", "Bulan Sabit", "Gerhana Matahari Cincin"], answer: 1 },
+  { id: 15, type: 'mcq', question: "Alternatif bijaksana untuk mengendalikan hama tanpa merusak tanah adalah...", options: ["Berhenti bertani agar tanah pulih kembali", "Menggunakan predator alami (biopestisida)", "Membakar lahan setelah panen", "Mengganti semua tanaman dengan tanaman plastik"], answer: 1 },
+  { id: 16, type: 'mcq', question: "Bus direm mendadak, penumpang terdorong ke depan. Ini membuktikan gaya dapat...", options: ["Mengubah bentuk benda", "Mengubah arah gerak benda", "Menghentikan gerak benda yang sedang bergerak", "Membuat benda diam menjadi bergerak"], answer: 2 },
+  { id: 17, type: 'mcq', question: "Jika bagian jantung sebelah kiri mengalami gangguan otot (lemah), maka...", options: ["Seluruh tubuh akan kekurangan suplai oksigen dan mudah lelah", "Darah tidak bisa masuk ke paru-paru", "Tekanan darah di seluruh tubuh akan meningkat drastis", "Produksi sel darah merah akan berhenti"], answer: 0 },
+  { id: 18, type: 'mcq', question: "Planet Merah, atmosfer tipis, dan memiliki Olympus Mons adalah...", options: ["Venus", "Mars", "Yupiter", "Saturnus"], answer: 1 },
+  
+  // Multiple Selection
+  { id: 19, type: 'multi', question: "Manakah ciri-ciri pubertas pada perempuan?", options: ["Tumbuhnya jakun di leher", "Mengalami menstruasi pertama (Menarche)", "Pinggul mulai melebar dan membesar", "Dada menjadi lebih bidang"], answer: [1, 2] },
+  { id: 20, type: 'multi', question: "Pilih pasangan sendi dan fungsinya yang tepat:", options: ["Sendi Engsel: Gerak satu arah", "Sendi Pelana: Gerak dua arah", "Sendi Geser: Gerak memutar 360 derajat", "Sendi Putar: Tulang atlas dan leher"], answer: [0, 1, 3] },
+  { id: 21, type: 'multi', question: "Peristiwa yang menunjukkan cahaya dapat dibiaskan?", options: ["Pensil terlihat patah di dalam air", "Terbentuknya bayangan di belakang tubuh", "Dasar kolam jernih terlihat lebih dangkal", "Cahaya senter menembus kaca jendela"], answer: [0, 2] },
+  { id: 22, type: 'multi', question: "Tumbuhan yang berkembang biak dengan umbi lapis?", options: ["Bawang Merah", "Kentang", "Bunga Bakung", "Jahe"], answer: [0, 2] },
+  { id: 23, type: 'multi', question: "Tindakan manusia yang mengganggu keseimbangan hutan?", options: ["Sistem tebang pilih", "Alih fungsi hutan menjadi sawit masif", "Reboisasi lahan gundul", "Perburuan liar hewan predator"], answer: [1, 3] },
+  { id: 24, type: 'multi', question: "Komponen listrik dan fungsinya yang benar:", options: ["Baterai: Sumber energi listrik", "Saklar: Pemutus/penyambung arus", "Kabel: Tempat penampungan daya", "Lampu: Pengubah listrik jadi Cahaya"], answer: [0, 1, 3] },
+  { id: 25, type: 'multi', question: "Sifat-sifat magnet permanen?", options: ["Memiliki dua kutub", "Kutub senama tarik-menarik", "Menarik benda emas dan plastik", "Kekuatan terbesar di kutub-kutubnya"], answer: [0, 3] },
+  { id: 26, type: 'multi', question: "Peristiwa yang memerlukan kalor (menyerap panas)?", options: ["Es batu mencair", "Uap air menjadi titik air", "Air mendidih", "Pembuatan agar-agar memadat"], answer: [0, 2] },
+  { id: 27, type: 'multi', question: "Sumber energi alternatif terbarukan?", options: ["Sinar Matahari", "Batubara", "Angin", "Gas Alam"], answer: [0, 2] },
+  { id: 28, type: 'multi', question: "Akibat revolusi Bumi adalah...", options: ["Terjadinya siang dan malam", "Perubahan musim", "Perbedaan lamanya waktu siang/malam", "Gerak semu harian matahari"], answer: [1, 2] },
+  { id: 29, type: 'multi', question: "Pasangan hewan dan alat gerak yang sesuai:", options: ["Ikan: Sirip", "Burung: Sayap", "Ular: Otot perut", "Katak: Ekor"], answer: [0, 1, 2] },
+  { id: 30, type: 'multi', question: "Fungsi bagian darah yang benar:", options: ["Sel darah merah: Angkut oksigen", "Sel darah putih: Bunuh kuman", "Keping darah: Pembekuan darah", "Plasma darah: Pompa darah"], answer: [0, 1, 2] },
+  { id: 31, type: 'multi', question: "Campuran heterogen yang terlihat kasat mata?", options: ["Larutan gula", "Kopi tubruk", "Es sirup rata", "Campuran air + pasir"], answer: [1, 3] },
+  { id: 32, type: 'multi', question: "Upaya penghematan energi listrik?", options: ["Mematikan lampu tak terpakai", "Mesin cuci untuk satu helai baju", "Mencabut kabel jika tak dipakai", "Menyalakan TV sepanjang malam"], answer: [0, 2] },
+  { id: 33, type: 'multi', question: "Pasangan hewan dan alat pernapasan yang benar:", options: ["Belalang: Trakea", "Cacing tanah: Kulit basah", "Paus: Insang", "Berudu: Insang"], answer: [0, 1, 3] },
+
+  // Sesuai / Tidak Sesuai
+  { id: 34, type: 'boolean', question: "Kupu-kupu mengalami tahapan ulat dan kepompong sebelum menjadi dewasa, sehingga disebut mengalami metamorfosis sempurna.", answer: true },
+  { id: 35, type: 'boolean', question: "Jika sebuah magnet batang dipotong menjadi dua bagian, maka masing-masing potongan hanya akan memiliki satu kutub saja.", answer: false },
+  { id: 36, type: 'boolean', question: "Matahari adalah pusat tata surya karena semua planet berputar mengelilinginya akibat gaya gravitasi Matahari.", answer: true },
+  { id: 37, type: 'boolean', question: "Sendok logam terasa panas saat dimasukkan ke kopi panas adalah contoh perpindahan panas secara konveksi.", answer: false },
+  { id: 38, type: 'boolean', question: "Emas murni dan garam dapur merupakan contoh zat tunggal karena terdiri dari materi yang sejenis.", answer: true },
+  { id: 39, type: 'boolean', question: "Buah apel yang jatuh dari pohon disebabkan oleh adanya gaya magnet bumi.", answer: false },
+  { id: 40, type: 'boolean', question: "Tumbuhnya kumis dan dada menjadi lebih bidang adalah ciri perkembangan sekunder pada remaja laki-laki.", answer: true },
+  { id: 41, type: 'boolean', question: "Dalam jaring-jaring makanan, jamur dan bakteri berperan sebagai produsen.", answer: false },
+  { id: 42, type: 'boolean', question: "Bunyi dapat merambat di ruang hampa udara (vakum) seperti di luar angkasa.", answer: false },
+  { id: 43, type: 'boolean', question: "Penyakit osteoporosis dapat dicegah dengan mengonsumsi susu.", answer: true },
+  { id: 44, type: 'boolean', question: "Hujan asam adalah fenomena alam normal yang membantu menyuburkan tanah.", answer: false },
+  { id: 45, type: 'boolean', question: "Pelestarian Komodo di habitat aslinya disebut pelestarian In-situ.", answer: true },
+];
+
+export default function App() {
+  const [view, setView] = useState('welcome'); 
+  const [currentUser, setCurrentUser] = useState(null);
+  const [formData, setFormData] = useState({ name: '', class: '', phone: '' });
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [doubtful, setDoubtful] = useState({});
+  const [timeLeft, setTimeLeft] = useState(3600); 
+  const [score, setScore] = useState(0);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+  const [adminResults, setAdminResults] = useState([]);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showGrid, setShowGrid] = useState(false);
+
+  // --- Auth Setup ---
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error("Auth Error:", err);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // --- Timer ---
+  useEffect(() => {
+    let timer;
+    if (view === 'quiz' && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && view === 'quiz') {
+      handleSubmitQuiz();
+    }
+    return () => clearInterval(timer);
+  }, [view, timeLeft]);
+
+  // --- Data Fetching for Admin ---
+  useEffect(() => {
+    if (view === 'admin' && currentUser) {
+      const q = query(
+        collection(db, 'artifacts', appId, 'public', 'data', 'results'), 
+        orderBy('timestamp', 'desc')
+      );
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAdminResults(results);
+      }, (err) => console.error("Firestore Listen Error:", err));
+      return () => unsubscribe();
+    }
+  }, [view, currentUser]);
+
+  const handleStart = () => {
+    if (formData.name && formData.class && formData.phone) {
+      setView('quiz');
+    }
+  };
+
+  const handleAnswer = (val) => {
+    const question = SOAL_DATA[currentIdx];
+    if (question.type === 'multi') {
+      const currentSelection = answers[question.id] || [];
+      const newSelection = currentSelection.includes(val)
+        ? currentSelection.filter(v => v !== val)
+        : [...currentSelection, val];
+      setAnswers({ ...answers, [question.id]: newSelection });
+    } else {
+      setAnswers({ ...answers, [question.id]: val });
+    }
+  };
+
+  const toggleDoubtful = () => {
+    const qId = SOAL_DATA[currentIdx].id;
+    setDoubtful({ ...doubtful, [qId]: !doubtful[qId] });
+  };
+
+  const calculateScore = () => {
+    let correctCount = 0;
+    SOAL_DATA.forEach(q => {
+      const userAns = answers[q.id];
+      if (q.type === 'mcq' && userAns === q.answer) correctCount++;
+      if (q.type === 'boolean' && userAns === q.answer) correctCount++;
+      if (q.type === 'multi') {
+        const isCorrect = Array.isArray(userAns) && 
+          userAns.length === q.answer.length && 
+          userAns.every(v => q.answer.includes(v));
+        if (isCorrect) correctCount++;
+      }
+    });
+    return Math.round((correctCount / SOAL_DATA.length) * 100);
+  };
+
+  const handleSubmitQuiz = async () => {
+    const finalScore = calculateScore();
+    setScore(finalScore);
+    
+    if (currentUser) {
+      try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'results'), {
+          name: formData.name,
+          class: formData.class,
+          phone: formData.phone,
+          score: finalScore,
+          timestamp: new Date().toISOString(),
+          userId: currentUser.uid,
+          status: finalScore >= 70 ? 'Lulus' : 'Tidak Lulus'
+        });
+      } catch (err) {
+        console.error("Error saving result:", err);
+      }
+    }
+    
+    setView('finish');
+    setShowConfirmSubmit(false);
+  };
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const handleAdminLogin = () => {
+    if (adminPassword === '1995') {
+      setView('admin');
+    }
+  };
+
+  const downloadExcel = () => {
+    let csv = "Nama,Kelas,No HP,Skor,Keterangan,Waktu\n";
+    adminResults.forEach(r => {
+      csv += `"${r.name}","${r.class}","${r.phone}",${r.score},"${r.status}","${r.timestamp}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Hasil_OSN_IPA_${new Date().getTime()}.csv`;
+    a.click();
+  };
+
+  return (
+    <div className="min-h-screen bg-emerald-600 font-sans text-slate-900 overflow-x-hidden">
+      {/* Header Info (Quiz Mode) */}
+      {view === 'quiz' && (
+        <div className="sticky top-0 z-40 bg-white shadow-md p-3 flex justify-between items-center border-b-4 border-blue-500">
+          <div className="flex items-center gap-2">
+            <div className="bg-blue-100 p-2 rounded-lg text-blue-700 hidden sm:block">
+              <User size={20} />
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Peserta</p>
+              <p className="font-bold text-slate-800 text-sm">{formData.name}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className={`flex flex-col items-end ${timeLeft < 300 ? 'text-red-600 animate-pulse' : 'text-emerald-700'}`}>
+              <div className="flex items-center gap-1">
+                <Clock size={18} />
+                <span className="font-mono font-bold text-xl">{formatTime(timeLeft)}</span>
+              </div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Sisa Waktu</p>
+            </div>
+            <button 
+              onClick={() => setShowGrid(true)}
+              className="bg-blue-600 hover:bg-blue-700 p-2 rounded-lg text-white transition-all shadow-md flex items-center gap-2 px-3 py-2"
+            >
+              <Grid size={18} />
+              <span className="text-xs font-bold hidden md:inline">Navigasi</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <main className="max-w-4xl mx-auto p-4 md:p-8">
+        
+        {/* Welcome Screen */}
+        {view === 'welcome' && (
+          <div className="flex flex-col items-center py-10 animate-in fade-in zoom-in">
+            <div className="flex flex-col items-center mb-6">
+              <div className="w-28 h-28 bg-white rounded-3xl p-3 shadow-xl mb-4 flex items-center justify-center overflow-hidden border-4 border-white">
+                <img 
+                  src="https://lh3.googleusercontent.com/u/0/d/12dwz6quA4sh3dFIE_IxhiVpA1hilT07q=w400-h400-p-k-no-nu" 
+                  alt="SDN 002 Sangatta Utara" 
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.target.src = "https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_Tut_Wuri_Handayani.png";
+                  }}
+                />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-black text-white text-center drop-shadow-lg tracking-tight">
+                SELEKSI OSN IPA<br/>SDN 002 SANGATTA UTARA
+              </h1>
+            </div>
+
+            <div className="bg-white/95 backdrop-blur-sm rounded-[2rem] p-6 md:p-8 w-full max-w-md shadow-2xl border-b-8 border-emerald-800">
+              <div className="space-y-5">
+                <div className="bg-emerald-50 p-4 rounded-2xl border-2 border-emerald-100">
+                   <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-emerald-600 p-2 rounded-lg text-white">
+                         <User size={20} />
+                      </div>
+                      <label className="block text-sm font-black text-emerald-900">Nama Lengkap</label>
+                   </div>
+                  <input 
+                    type="text" 
+                    placeholder="Ketik nama lengkapmu di sini..."
+                    className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 outline-none transition-all font-bold text-emerald-800"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  />
+                </div>
+
+                <div className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-100">
+                   <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-blue-600 p-2 rounded-lg text-white">
+                         <Hash size={20} />
+                      </div>
+                      <label className="block text-sm font-black text-blue-900">Kelas</label>
+                   </div>
+                  <input 
+                    type="text" 
+                    placeholder="Contoh: 5A atau Kelas 4..."
+                    className="w-full p-4 rounded-xl border-2 border-blue-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all font-bold text-blue-800"
+                    value={formData.class}
+                    onChange={(e) => setFormData({...formData, class: e.target.value})}
+                  />
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Nomor WhatsApp Aktif</label>
+                  <input 
+                    type="tel" 
+                    placeholder="08xxxxxxxxxx"
+                    className="w-full p-3 rounded-xl border-2 border-slate-200 focus:border-emerald-500 outline-none transition-all"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  />
+                </div>
+
+                <button 
+                  onClick={handleStart}
+                  disabled={!formData.name || !formData.class || !formData.phone}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-black py-5 rounded-2xl shadow-lg transition-all active:scale-95 mt-4 text-lg"
+                >
+                  MULAI MENGERJAKAN
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quiz Screen */}
+        {view === 'quiz' && (
+          <div className="animate-in slide-in-from-bottom-8 duration-500">
+            <div className="bg-white rounded-[2.5rem] p-6 md:p-10 shadow-2xl min-h-[500px] flex flex-col border-b-8 border-slate-100">
+              <div className="flex justify-between items-start mb-8">
+                <div className="flex flex-col gap-1">
+                  <span className="bg-blue-100 text-blue-700 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">
+                    SOAL NOMOR {currentIdx + 1}
+                  </span>
+                </div>
+                {SOAL_DATA[currentIdx].type === 'multi' && (
+                  <span className="bg-amber-100 text-amber-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase flex items-center gap-2 border border-amber-200">
+                    <AlertTriangle size={14} /> Pilih beberapa jawaban benar
+                  </span>
+                )}
+              </div>
+
+              <h2 className="text-xl md:text-2xl font-bold text-slate-800 leading-relaxed mb-10">
+                {SOAL_DATA[currentIdx].question}
+              </h2>
+
+              <div className="space-y-4 flex-grow">
+                {SOAL_DATA[currentIdx].type === 'boolean' ? (
+                  <div className="grid grid-cols-2 gap-6 mt-6">
+                    <button 
+                      onClick={() => handleAnswer(true)}
+                      className={`py-12 rounded-3xl text-xl font-black transition-all border-4 ${
+                        answers[SOAL_DATA[currentIdx].id] === true 
+                        ? 'bg-emerald-600 text-white border-emerald-400 scale-105 shadow-2xl' 
+                        : 'bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100'
+                      }`}
+                    >
+                      SESUAI
+                    </button>
+                    <button 
+                      onClick={() => handleAnswer(false)}
+                      className={`py-12 rounded-3xl text-xl font-black transition-all border-4 ${
+                        answers[SOAL_DATA[currentIdx].id] === false 
+                        ? 'bg-rose-600 text-white border-rose-400 scale-105 shadow-2xl' 
+                        : 'bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-100'
+                      }`}
+                    >
+                      TIDAK SESUAI
+                    </button>
+                  </div>
+                ) : (
+                  SOAL_DATA[currentIdx].options.map((opt, i) => {
+                    const isMulti = SOAL_DATA[currentIdx].type === 'multi';
+                    const isSelected = isMulti
+                      ? (answers[SOAL_DATA[currentIdx].id] || []).includes(i)
+                      : answers[SOAL_DATA[currentIdx].id] === i;
+                    
+                    return (
+                      <button 
+                        key={i}
+                        onClick={() => handleAnswer(i)}
+                        className={`w-full text-left p-5 rounded-2xl border-2 transition-all flex items-center gap-5 ${
+                          isSelected 
+                          ? 'border-blue-500 bg-blue-50 shadow-inner' 
+                          : 'border-slate-100 hover:border-blue-200 bg-slate-50'
+                        }`}
+                      >
+                        {isMulti ? (
+                           <div className={`w-7 h-7 rounded-lg flex items-center justify-center border-2 flex-shrink-0 transition-colors ${
+                              isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300'
+                           }`}>
+                              {isSelected && <CheckCircle size={18} />}
+                           </div>
+                        ) : (
+                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black flex-shrink-0 transition-all ${
+                              isSelected ? 'bg-blue-600 text-white scale-110 shadow-lg' : 'bg-white border-2 border-slate-200 text-slate-400'
+                           }`}>
+                              {String.fromCharCode(65 + i)}
+                           </div>
+                        )}
+                        <span className={`font-bold text-lg ${isSelected ? 'text-blue-900' : 'text-slate-700'}`}>{opt}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Controls */}
+              <div className="mt-16 flex gap-4 items-center justify-between border-t border-slate-100 pt-8">
+                <button 
+                  disabled={currentIdx === 0}
+                  onClick={() => setCurrentIdx(prev => prev - 1)}
+                  className="flex items-center gap-2 px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 disabled:opacity-30 transition-all"
+                >
+                  <ChevronLeft size={24} /> <span className="hidden md:inline">KEMBALI</span>
+                </button>
+
+                <button 
+                  onClick={toggleDoubtful}
+                  className={`px-8 py-4 rounded-2xl font-black border-4 transition-all flex items-center gap-2 ${
+                    doubtful[SOAL_DATA[currentIdx].id] 
+                    ? 'bg-amber-400 border-amber-300 text-white shadow-lg' 
+                    : 'bg-white border-amber-100 text-amber-500 hover:bg-amber-50'
+                  }`}
+                >
+                  <AlertTriangle size={20} /> RAGU-RAGU
+                </button>
+
+                {currentIdx === SOAL_DATA.length - 1 ? (
+                  <button 
+                    onClick={() => setShowConfirmSubmit(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 transition-all active:scale-95"
+                  >
+                    KIRIM <Send size={20} />
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setCurrentIdx(prev => prev + 1)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 transition-all active:scale-95"
+                  >
+                    LANJUT <ChevronRight size={20} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Finish Screen */}
+        {view === 'finish' && (
+          <div className="flex flex-col items-center py-10 animate-in fade-in zoom-in">
+            <div className="bg-white rounded-[3rem] p-12 w-full max-w-md shadow-2xl text-center border-t-8 border-emerald-500">
+              <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8">
+                <CheckCircle size={56} />
+              </div>
+              <h2 className="text-3xl font-black text-slate-800 mb-2">Luar Biasa!</h2>
+              <p className="text-slate-500 mb-10 font-bold">{formData.name}, jawabanmu sudah terkirim.</p>
+              
+              <div className="bg-emerald-50 rounded-3xl p-8 mb-10 border-4 border-emerald-100">
+                <p className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em] mb-2">Nilai Kamu</p>
+                <div className="text-7xl font-black text-emerald-700">{score}</div>
+              </div>
+
+              <p className="text-sm text-slate-400 italic mb-10">Ujian seleksi OSN IPA SDN 002 Sangatta Utara selesai.</p>
+              
+              <button 
+                onClick={() => window.location.reload()}
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black shadow-lg hover:bg-slate-800"
+              >
+                KEMBALI KE BERANDA
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Login */}
+        {view === 'admin_login' && (
+          <div className="flex flex-col items-center py-20">
+            <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl w-full max-w-sm">
+              <h2 className="text-2xl font-black mb-8 flex items-center gap-3">ADMIN LOGIN</h2>
+              <input 
+                type="password" 
+                placeholder="Masukkan Sandi Rahasia"
+                className="w-full p-5 rounded-2xl border-4 border-slate-100 mb-6 focus:border-slate-800 outline-none font-bold"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+              />
+              <button 
+                onClick={handleAdminLogin}
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black shadow-xl"
+              >
+                MASUK PANEL
+              </button>
+              <button onClick={() => setView('welcome')} className="w-full mt-6 text-slate-400 font-bold text-sm underline">Kembali</button>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Panel */}
+        {view === 'admin' && (
+          <div className="bg-white rounded-[2.5rem] shadow-2xl p-6 md:p-10 animate-in fade-in">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900">REKAP NILAI</h2>
+                <p className="text-slate-500 font-bold">Terdaftar {adminResults.length} Peserta</p>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={downloadExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-black flex items-center gap-2 shadow-lg transition-all">
+                  <Download size={20} /> DOWNLOAD CSV
+                </button>
+                <button onClick={() => setView('welcome')} className="bg-rose-100 text-rose-700 px-6 py-3 rounded-xl font-black hover:bg-rose-200 transition-all">
+                  KELUAR
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto border-4 border-slate-50 rounded-3xl">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-5 text-xs font-black text-slate-400 uppercase tracking-widest">Nama Peserta</th>
+                    <th className="p-5 text-xs font-black text-slate-400 uppercase tracking-widest">Kelas</th>
+                    <th className="p-5 text-xs font-black text-slate-400 uppercase tracking-widest">Skor</th>
+                    <th className="p-5 text-xs font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y-4 divide-slate-50">
+                  {adminResults.map((res) => (
+                    <tr key={res.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-5 font-black text-slate-800">{res.name}</td>
+                      <td className="p-5 font-bold text-slate-500">{res.class}</td>
+                      <td className="p-5">
+                        <span className="text-2xl font-black text-emerald-600">{res.score}</span>
+                      </td>
+                      <td className="p-5">
+                        <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${res.score >= 70 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                          {res.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* Grid Overlay */}
+      {showGrid && (
+        <div className="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[3rem] p-8 shadow-2xl flex flex-col border-b-8 border-slate-200">
+            <div className="flex justify-between items-center mb-10">
+              <div className="flex items-center gap-3">
+                 <div className="bg-blue-600 p-2 rounded-lg text-white">
+                    <BookOpen size={24} />
+                 </div>
+                 <h3 className="text-2xl font-black text-slate-900">NAVIGASI SOAL</h3>
+              </div>
+              <button onClick={() => setShowGrid(false)} className="bg-slate-100 p-3 rounded-full hover:bg-slate-200 transition-all">
+                 <ChevronRight size={24} />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-5 sm:grid-cols-9 gap-4 max-h-[60vh] overflow-y-auto p-2">
+              {SOAL_DATA.map((q, i) => {
+                const isAnswered = answers[q.id] !== undefined && (Array.isArray(answers[q.id]) ? answers[q.id].length > 0 : true);
+                const isDoubtful = doubtful[q.id];
+                const isActive = currentIdx === i;
+
+                return (
+                  <button 
+                    key={q.id}
+                    onClick={() => { setCurrentIdx(i); setShowGrid(false); }}
+                    className={`h-14 rounded-2xl font-black text-lg transition-all border-b-4 flex items-center justify-center active:scale-95 ${
+                      isActive ? 'bg-blue-600 text-white border-blue-800 ring-4 ring-blue-100' :
+                      isDoubtful ? 'bg-amber-400 text-white border-amber-600' :
+                      isAnswered ? 'bg-emerald-500 text-white border-emerald-700' :
+                      'bg-slate-100 text-slate-400 border-slate-300'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4 pt-8 border-t border-slate-100">
+               <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                  <div className="w-4 h-4 rounded bg-emerald-500"></div> Dijawab
+               </div>
+               <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                  <div className="w-4 h-4 rounded bg-amber-400"></div> Ragu-ragu
+               </div>
+               <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                  <div className="w-4 h-4 rounded bg-slate-100"></div> Belum Isi
+               </div>
+               <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                  <div className="w-4 h-4 rounded bg-blue-600"></div> Posisi Sekarang
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Submit */}
+      {showConfirmSubmit && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] p-10 max-w-sm w-full text-center shadow-2xl">
+            <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+               <Send size={40} />
+            </div>
+            <h3 className="text-2xl font-black mb-3">SELESAI?</h3>
+            <p className="text-slate-500 mb-10 font-bold leading-relaxed">Pastikan semua soal sudah kamu jawab dengan teliti ya!</p>
+            <div className="flex flex-col gap-3">
+              <button onClick={handleSubmitQuiz} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg shadow-xl hover:bg-blue-700 transition-all">YA, KIRIM SEKARANG</button>
+              <button onClick={() => setShowConfirmSubmit(false)} className="w-full py-4 font-black text-slate-400 hover:text-slate-600 transition-all">CEK LAGI</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <footer className="py-12 text-center select-none">
+        <p className="text-white/40 text-[10px] uppercase font-black tracking-[0.3em]">
+          DEVELOPED BY HILDEGARDIS SEPTIANITA
+        </p>
+        <button 
+          onClick={() => setView('admin_login')} 
+          className="mt-4 text-emerald-200/50 hover:text-white transition-colors text-xs font-bold flex items-center gap-2 mx-auto"
+        >
+          <ShieldCheck size={14} /> Panel Guru
+        </button>
+      </footer>
+    </div>
+  );
+}
